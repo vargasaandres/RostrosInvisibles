@@ -1,0 +1,13 @@
+name: PruebaProyecto
+title: PruebaProyecto
+username: kevincarrillo031
+account: kevincarrillo031
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14811356
+bundleId: 10328548
+url: https://kevincarrillo031.shinyapps.io/PruebaProyecto/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|.Rprofile|app.R|renv.lock

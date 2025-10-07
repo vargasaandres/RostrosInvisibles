@@ -1,0 +1,13 @@
+name: Proyecto
+title: Proyecto
+username: kevincarrillo031
+account: kevincarrillo031
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14809723
+bundleId: 11001504
+url: https://rostrosinvisibles.shinyapps.io/Proyecto/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|.Rprofile|app.R|renv.lock

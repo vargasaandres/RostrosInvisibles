@@ -1,0 +1,1315 @@
+#---- librerias para ejecución ----
+library(shiny)
+library(mongolite)
+library(dplyr)
+library(plotly)
+library(ggplot2)
+library(DT)
+library(DBI)
+library(jsonlite)
+library(shinyjs)
+library(shinyalert)
+library(jose)
+library(base64enc)
+library(shiny.router)
+library(writexl)
+library(blastula)
+library(openxlsx)
+library(glue)
+library(later)
+library(bcrypt)
+library(uuid)
+library(digest)
+
+
+
+#---- Front ----
+ui <- fluidPage(
+  useShinyjs(),  # Necesario para shinyj
+  
+  
+  tags$head(
+    tags$head(
+      
+      # Script para manejar el JWT
+      tags$script(HTML("
+  $(document).on('shiny:connected', function() {
+    var token = sessionStorage.getItem('jwt');
+    if (token) {
+      // Forzar refresco de input para disparar observeEvent
+      Shiny.setInputValue('jwt_token', null);
+      Shiny.setInputValue('jwt_token', token, {priority: 'event'});
+    }
+  });
+")),
+      
+      # Estilos CSS para el login
+      tags$style(HTML("
+    
+      /* Contenedor principal centrado */
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: #f4f6f9;
+  }
+
+  /* Caja del login */
+  .login-box {
+    width: 360px;
+    padding: 30px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    font-family: 'Segoe UI', sans-serif;
+    transition: box-shadow 0.3s ease;
+  }
+
+  .login-box:hover {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Título */
+  .login-box h2 {
+    margin-bottom: 20px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  /* Campos de entrada */
+  .login-box input[type='text'],
+  .login-box input[type='password'] {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #f9f9f9;
+    transition: border-color 0.3s, background 0.3s;
+    font-size: 14px;
+  }
+
+  .login-box input:focus {
+    border-color: #007bff;
+    background: #fff;
+    outline: none;
+  }
+
+  /* Botón de login */
+  .login-box .btn-login {
+    width: 100%;
+    padding: 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+  }
+
+  .login-box .btn-login:hover {
+    background-color: #0056b3;
+  }
+
+  /* Mensajes de error o alerta */
+  .login-box .login-message {
+    margin-top: 10px;
+    color: #e74c3c;
+    font-size: 13px;
+  }
+
+    /* Fondo general */
+    body {
+      background-color: #f4f6fa !important;
+      color: #1f2937 !important;
+      font-family: 'Segoe UI', 'Roboto', sans-serif !important;
+      font-size: 15px;
+    }
+    
+    /* Tarjetas principales */
+    .custom-card {
+      background-color: #ffffff;
+      padding: 24px;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+      margin: 20px 0;
+    }
+    /* Botones elegantes más pequeños */
+    .btn-custom {
+      background-color: #3b82f6 !important;
+      color: #fff !important;
+      border-radius: 8px;
+      padding: 6px 14px;          /* menos padding para que sea más pequeño */
+      font-weight: 600;
+      font-size: 14px;            /* fuente un poco más pequeña */
+      border: none;
+      box-shadow: 0 3px 8px rgba(59, 130, 246, 0.3);
+      transition: all 0.2s ease-in-out;
+      margin: 4px 0;
+    }
+    .btn-custom:hover {
+      background-color: #2563eb !important;
+      box-shadow: 0 5px 12px rgba(37, 99, 235, 0.4);
+    }
+    
+    /* Inputs y selects más compactos */
+    select, input[type=text], .form-control {
+      background-color: #ffffff !important;
+      border: 1px solid #d1d5db !important;
+      border-radius: 8px !important;
+      padding: 6px 10px !important;  /* menos padding */
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: border 0.2s ease-in-out;
+      font-size: 14px;               /* tamaño de fuente un poco más pequeño */
+    }
+    
+    /* Estilo para tablas */
+    .table.dataTable {
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+      font-size: 14px;
+    }
+    .dataTable th {
+      background-color: #3b82f6;
+      color: white;
+      text-align: left;
+      padding: 10px;
+    }
+    .dataTable td {
+      padding: 10px;
+    }
+    
+    /* Notificaciones y mensajes */
+    .swal-text {
+      color: #1f2937;
+      font-weight: 500;
+    }
+    .swal-button {
+      background-color: #10b981;
+    }
+    .swal-button:hover {
+      background-color: #059669;
+    }
+        
+    /* Panel de control lateral */
+    .panel-control {
+      background-color: #f8fafc;
+      padding: 24px;
+      border-radius: 14px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+      margin-top: 20px;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    
+    
+    /* Panel principal de visualización */
+    .panel-visual {
+    background-color: #ffffff;
+    padding: 24px;
+    border-radius: 14px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+    margin-top: 20px;
+    font-family: 'Segoe UI', sans-serif;
+  }
+
+
+  
+"))
+    ),
+    
+    #---- Login Panel----
+    div(id = "loginPanel", class = "login-container",
+        div(class = "login-box",
+            div(
+              style = "text-align: center; font-weight: bold; font-size: 18px; margin-bottom: 20px;",
+              "¡ROSTROS INVISIBLES, EL COSTO DEL SILENCIO!", tags$br(),
+              "Inicia sesión, por favor"
+            ),
+            # Campo Usuario con placeholder
+            tags$div(
+              style = "margin-bottom: 20px;",
+              tags$div("USUARIO", style = "text-align: center; font-weight: bold; margin-bottom: 5px;"),
+              tags$input(
+                id = "username",
+                type = "text",
+                class = "form-control",
+                placeholder = "Ingrese su usuario",
+                style = "width: 100%; padding-right: 40px; height: 35px; box-sizing: border-box;"
+              )
+            ),
+            
+            tags$div(
+              style = "position: relative; margin-bottom: 20px;",
+              tags$div("Contraseña", style = "text-align: center; font-weight: bold; margin-bottom: 5px;"),
+              tags$input(
+                id = "password",
+                type = "password",
+                class = "form-control",
+                placeholder = "Ingrese su contraseña",
+                style = "width: 100%; padding-right: 40px; height: 40px; box-sizing: border-box;"
+              ),
+              tags$i(
+                id = "togglePassword",
+                class = "fas fa-eye",
+                style = " position: absolute; top: 50%; height: 65px; right: 12px; transform: translateY(-50%); cursor: pointer; color: #6b7280;"
+              ),
+              actionButton("login", "Iniciar Sesión"),
+              tags$div(
+                style = "margin-top: 10px;",
+                actionLink("olvide_pass", "¿Olvidó su contraseña?")
+              ),
+              # Botón para abrir el registro
+              tags$div(
+                style = "margin-top: 15px; text-align: center;",
+                actionLink("register_btn", "¿No tienes cuenta? Regístrate aquí")
+              )
+            ))
+    ),
+    
+    
+    #---- Script para funcionalidad del ojito----
+    tags$script(HTML("
+  document.addEventListener('DOMContentLoaded', function () {
+    const toggle = document.getElementById('togglePassword');
+    const input = document.getElementById('password');
+    toggle.addEventListener('click', function () {
+      const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
+      input.setAttribute('type', type);
+      this.classList.toggle('fa-eye');
+      this.classList.toggle('fa-eye-slash');
+    });
+  });
+")),
+    # Cargar Font Awesome para el ícono del ojo
+    tags$head(
+      tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css")
+    ),
+    
+    
+    
+    #---- Contenido de la app (Cajita en la izquierda)----
+    shinyjs::hidden(
+      div(id = "app_content",
+          sidebarLayout(
+            sidebarPanel(
+              class = "panel-control",
+              
+              # Base de Datos
+              selectInput(
+                inputId = "bd", 
+                label = tags$span("Base de Datos", title = "Selecciona la base de datos a usar"), 
+                choices = character(0),
+                selectize = FALSE
+              ),
+              
+              # Colección
+              selectInput(
+                inputId = "coleccion", 
+                label = tags$span("Colección", title = "Selecciona la colección dentro de la base de datos"), 
+                choices = character(0),
+                selectize = FALSE
+              ),
+              
+              # Variable X
+              selectInput(
+                inputId = "xvar", 
+                label = tags$span("Variable X", title = "Selecciona la variable para el eje X"), 
+                choices = character(0),
+                selectize = FALSE
+              ),
+              
+              # Botón para intercambiar ejes
+              actionButton("swap_axes", "Intercambiar Ejes", class = "btn-custom"),
+              
+              # Variable Y
+              selectInput(
+                inputId = "yvar", 
+                label = tags$span("Variable Y", title = "Selecciona la variable para el eje Y"), 
+                choices = character(0),
+                selectize = FALSE
+              ),
+              
+              # Tipo de gráfico
+              selectInput(
+                inputId = "grafico", 
+                label = tags$span("Tipo de gráfico", title = "Elige el tipo de gráfico a generar"), 
+                choices = c("Barras", "Puntos", "Líneas", "Histograma", "Caja"),
+                selected = "Barras",
+                selectize = FALSE
+              ),
+              
+              # Botones
+              tags$div(
+                style = "margin-top: 10px;",
+                actionButton("generar", "Generar Gráfico", class = "btn-custom"),
+                downloadButton("descargar_excel", "Descargar Excel", class = "btn-custom"),
+                downloadButton("descargar_zip", "Descargar carpeta de archivos", class = "btn-custom"),
+                actionButton("support", "Soporte", class = "btn-custom"),
+                actionButton("logout", "Cerrar Sesión", class = "btn-custom")
+              )
+            ),
+            
+            mainPanel(
+              class = "panel-visual",
+              plotlyOutput("graficoSalida")
+            )
+          ),
+          
+          div(
+            class = "custom-card",
+            DTOutput("tablaDatos")
+          )
+      )
+    ),
+    
+    
+    # --- Pantalla para usuarios normales (entrevistadores) ---
+    shinyjs::hidden(
+      div(id = "user_panel",
+          class = "custom-card",
+          fluidRow(
+            column(8,
+                   h3("Ficha de Entrevista - Registro de caso"),
+                   hr(),
+                   # Consentimiento
+                   checkboxInput("consentimiento", 
+                                 label = HTML("<b>Acepto el tratamiento de datos</b> (Ley 1581/2012) y autorizo el registro de la información consignada en esta ficha)."),
+                                 value = FALSE),
+                   actionLink("ver_texto_consentimiento", "Ver texto completo del consentimiento"),
+                   br(), br(),
+                   
+                   # Datos del entrevistador (auto)
+                   textInput("entrevistador_nombre", "Entrevistador (usuario)", value = "", width = "100%", placeholder = "Se autocompleta al iniciar sesión"),
+                   textInput("medio_entrevista", "Lugar o medio (ej: Presencial / Llamada / Videollamada)"),
+                   dateInput("fecha_entrevista", "Fecha de la entrevista", value = Sys.Date()),
+                   textInput("hora_entrevista", "Hora (HH:MM)", value = format(Sys.time(), "%H:%M")),
+                   hr(),
+                   
+                   # Datos del entrevistado (opcionalmente anonimizado)
+                   h4("Datos del entrevistado (manejar con cautela)"),
+                   textInput("victim_nombre", "Nombre (opcional)"),
+                   textInput("victim_edad", "Edad o rango de edad"),
+                   textInput("victim_ciudad", "Ciudad / Municipio"),
+                   selectInput("victim_genero", "Género", choices = c("Prefiere no decir", "Masculino","Femenino","Otro")),
+                   textInput("victim_ocupacion", "Ocupación / actividad principal"),
+                   hr(),
+                   
+                   # Contexto de la extorsión
+                   h4("Contexto de la extorsión"),
+                   selectInput("victim_tipo_victimizacion", "¿Victimización?", choices = c("Directa","Indirecta","No aplica")),
+                   textInput("medio_extorsion", "Medio (Llamada, SMS, Redes sociales, Presencial, Otro)"),
+                   radioButtons("solicitud_dinero", "¿Solicitaron dinero o bienes?", choices = c("Sí","No","No aplica"), inline = TRUE),
+                   textInput("agresor_afirmacion", "¿El agresor dijo pertenecer a grupo armado/banda? (descripción corta)"),
+                   selectInput("denuncia", "¿Denunció ante autoridades?", choices = c("No","Sí","En proceso")),
+                   selectInput("nivel_afectacion", "Nivel de afectación percibido", choices = c("Bajo","Medio","Alto")),
+                   textAreaInput("observaciones", "Observaciones (campo libre,  max 2000 caracteres)", rows = 6),
+                   hr(),
+                   
+                   # Acciones y consentimiento para seguimiento
+                   checkboxInput("acompanamiento", "Se brindó acompañamiento psicológico/jurídico (marcar si aplica)", value = FALSE),
+                   checkboxInput("contacto_futuro", "Autorización para contactar nuevamente al entrevistado (si aplica)", value = FALSE),
+                   checkboxInput("compartir_anonimo", "Autorización para compartir caso de forma anónima con otras entidades", value = FALSE),
+                   
+                   br(),
+                   actionButton("guardar_caso", "Guardar entrevista", class = "btn-custom"),
+                   actionButton("limpiar_formulario", "Limpiar formulario", class = "btn-custom")
+            ),
+            
+            column(4,
+                   div(class = "panel-control",
+                       h4("Instrucciones rápidas"),
+                       p("1. Marque el consentimiento antes de registrar la entrevista."),
+                       p("2. Evite registrar datos identificativos innecesarios. Preferible: usar código de caso."),
+                       p("3. Si registra nombre u otro dato sensible, se almacenará de forma **hashed** para proteger la identidad."),
+                       hr(),
+                       h5("Estado"),
+                       verbatimTextOutput("status_user_panel")
+                   )
+            )
+          )
+      )
+    )
+    
+    
+  )
+  
+)
+
+#---- Back ----
+server <- function(input, output, session) {
+  
+  
+  #---- Variables reactivas----
+  user_authenticated <- reactiveVal(FALSE)
+  mongo_url <- reactiveVal(NULL)
+  datos_reactivos <- reactiveVal(data.frame())
+  
+  #---- Variable para controlar cooldown----
+  ultima_solicitud <- reactiveVal(Sys.time() - 300)
+  
+  #---- Llave secreta para JWT (asegúrate que está seteada en tu entorno)----
+  jwt_secret <- Sys.getenv("JWT_SECRET")
+  if (jwt_secret == "") stop("JWT_SECRET no está definido en variables de entorno")
+  
+  #---- Crear token----
+  crear_token <- function(username, mongo_url, bd = NULL, coleccion = NULL, xvar = NULL, yvar = NULL) {
+    claim <- jwt_claim(
+      sub = username,
+      mongo_url = mongo_url,
+      bd = bd,
+      coleccion = coleccion,
+      xvar = xvar,
+      yvar = yvar,
+      iat = as.numeric(Sys.time()),
+      exp = as.numeric(Sys.time()) + 3600,
+      jti = paste0(sample(c(0:9, letters), 16, replace = TRUE), collapse = "")
+    )
+    jwt_encode_hmac(claim, secret = jwt_secret)
+  }
+  
+  #---- Verificar token----
+  verificar_token <- function(token) {
+    tryCatch({
+      decoded <- jwt_decode_hmac(token, secret = jwt_secret)
+      payload <- decoded$payload
+      if (is.null(payload$exp) || payload$exp < as.numeric(Sys.time())) return(NULL)
+      return(payload)
+    }, error = function(e) NULL)
+  }
+  
+  
+  #---- Función para obtener bases de datos----
+  get_databases <- function(url_mongo) {
+    tryCatch({
+      conexion <- mongo(collection = "$cmd", db = "admin", url = url_mongo)
+      resultado <- conexion$run('{"listDatabases": 1}')
+      if (!is.null(resultado$databases)) {
+        bases <- resultado$databases$name
+        # Quitar "admin" y "local"
+        bases_filtradas <- setdiff(bases, c("admin", "local"))
+        return(bases_filtradas)
+      } else {
+        return(NULL)
+      }
+    }, error = function(e) {
+      return(NULL)
+    })
+  }
+  
+  #---- Función para obtener colecciones----
+  get_collections <- function(db_name, url_mongo) {
+    tryCatch({
+      conexion <- mongo(db = db_name, url = url_mongo)
+      conexion$run('{ "listCollections": 1 }')$cursor$firstBatch$name
+    }, error = function(e) {
+      return(NULL)
+    })
+  }
+  
+  #---- Función para obtener columnas de una colección----
+  get_columns <- function(db_name, collection_name, url_mongo) {
+    conexion <- mongo(collection = collection_name, db = db_name, url = url_mongo)
+    if (!conexion$count()) return(NULL)
+    datos <- conexion$find('{}', limit = 5)
+    colnames(datos)
+  }
+  
+  #---- Función para generar la URL de conexión a MongoDB----
+  generate_mongo_url <- function(user, password) {
+    sprintf("mongodb+srv://%s:%s@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0", 
+            user, password)
+  }
+  
+  #---- Verificar el token al cargar la app----
+  observe({
+    if (user_authenticated()) {
+      hide("loginPanel")
+      show("app_content")
+    } else {
+      show("loginPanel")
+      hide("app_content")
+    }
+  })
+  
+  
+  #---- Registro de usuarios----
+  mongo_users <- mongo(
+    collection = "User",
+    db = "UsuariosApp",
+    url = Sys.getenv("USUARIOS_MONGO_URL")
+  )
+  
+  # Abrir modal de registro
+  observeEvent(input$register_btn, {
+    showModal(modalDialog(
+      title = "Registrar nuevo usuario",
+      textInput("reg_nombre", "Nombre"),
+      textInput("reg_apellido", "Apellido"),
+      textInput("reg_correo", "Correo"),
+      passwordInput("reg_pass", "Contraseña"),
+      passwordInput("reg_pass2", "Repetir contraseña"),
+      footer = tagList(
+        modalButton("Cancelar"),
+        actionButton("confirmar_registro", "Registrar", class = "btn-success")
+      )
+    ))
+  })
+  
+  # Validar y registrar usuario
+  observeEvent(input$confirmar_registro, {
+    
+    # Sanitización básica
+    nombre <- trimws(input$reg_nombre)
+    apellido <- trimws(input$reg_apellido)
+    correo <- trimws(tolower(input$reg_correo))
+    pass <- input$reg_pass
+    pass2 <- input$reg_pass2
+    
+    # Validaciones
+    if (any(c(nombre, apellido, correo, pass, pass2) == "")) {
+      showNotification("Por favor, completa todos los campos.", type = "error")
+      return()
+    }
+    
+    if (!grepl("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$", correo)) {
+      showNotification("El correo ingresado no es válido.", type = "error")
+      return()
+    }
+    
+    if (pass != pass2) {
+      showNotification("Las contraseñas no coinciden.", type = "error")
+      return()
+    }
+    
+    # Verificar si el correo ya existe
+    existing_user <- mongo_users$find(query = paste0('{"Correo": "', correo, '"}'))
+    
+    if (nrow(existing_user) > 0) {
+      showNotification("Ya existe un usuario con ese correo.", type = "error")
+      return()
+    }
+    
+    # Crear documento
+    new_user <- data.frame(
+      Nombre = input$nombre,
+      Apellido = input$apellido,
+      Correo = input$correo,
+      Contrasena = input$password,
+      FechaRegistro = Sys.time()
+    )
+    
+    # Insertar en MongoDB
+    mongo_users$insert(new_user)
+    
+    removeModal()
+    showNotification("Usuario registrado exitosamente.", type = "message")
+  })
+  
+  #---- Conexión a MongoDB para casos ----
+  # Conexión a la colección Casos (usa la misma variable de entorno)
+  mongo_casos <- reactiveVal(NULL)
+  observe({
+    url_conn <- Sys.getenv("USUARIOS_MONGO_URL")
+    if (nzchar(url_conn)) {
+      # conexión reactiva para reusar si existe
+      mongo_casos(mongo(collection = "Casos", db = "CasosExtorsion", url = url_conn))
+    }
+  })
+  
+  # Helper para mostrar la pantalla del entrevistador
+  show_user_panel_for <- function(usuario_email) {
+    # colocar el nombre del entrevistador en el campo visible
+    updateTextInput(session, "entrevistador_nombre", value = input$username)
+    
+    
+    
+    
+    # ocultar login y cualquier app principal
+    shinyjs::hide("loginPanel")
+    shinyjs::hide("app_content")
+    shinyjs::show("user_panel")
+    
+    output$status_user_panel <- renderText({
+      paste0("Entrando como: ", usuario_email, "\nConexión Casos: ", ifelse(is.null(mongo_casos()), "NO", "OK"))
+    })
+  }
+  
+  # Botón para ver texto completo de consentimiento en modal
+  observeEvent(input$ver_texto_consentimiento, {
+    showModal(modalDialog(
+      title = "Consentimiento para tratamiento de datos",
+      size = "l",
+      easyClose = TRUE,
+      HTML(paste0(
+        "<p>Se informa que la información registrada será utilizada para fines de prevención, acompañamiento y seguimiento de casos de extorsión. ",
+        "Los datos sensibles serán tratados con confidencialidad y, cuando sea posible, anonimizada. ",
+        "El entrevistado puede negarse a proporcionar información y a ser contactado posteriormente.</p>",
+        "<p>Fecha: ", Sys.Date(), "</p>"
+      )),
+      footer = modalButton("Cerrar")
+    ))
+  })
+  
+  # Limpiar formulario
+  observeEvent(input$limpiar_formulario, {
+    updateTextInput(session, "victim_nombre", value = "")
+    updateTextInput(session, "victim_edad", value = "")
+    updateTextInput(session, "victim_ciudad", value = "")
+    updateTextInput(session, "victim_ocupacion", value = "")
+    updateTextInput(session, "medio_extorsion", value = "")
+    updateTextInput(session, "agresor_afirmacion", value = "")
+    updateTextInput(session, "observaciones", value = "")
+    updateCheckboxInput(session, "consentimiento", value = FALSE)
+    updateCheckboxInput(session, "acompanamiento", value = FALSE)
+    updateCheckboxInput(session, "contacto_futuro", value = FALSE)
+    updateCheckboxInput(session, "compartir_anonimo", value = FALSE)
+    showNotification("Formulario limpiado.", type = "message")
+  })
+  
+  # Guardar caso
+  observeEvent(input$guardar_caso, {
+    # Validaciones
+    if (!isTRUE(input$consentimiento)) {
+      shinyalert("Consentimiento requerido", "Debes aceptar el tratamiento de datos para continuar.", type = "error")
+      return()
+    }
+    # Limitar longitud observaciones
+    if (!is.null(input$observaciones) && nchar(input$observaciones) > 2000) {
+      showNotification("Observaciones demasiado largas (máx 2000 caracteres).", type = "error")
+      return()
+    }
+    
+    # Sanitización básica
+    entrevistador <- trimws(as.character(input$entrevistador_nombre))
+    medio <- trimws(as.character(input$medio_entrevista))
+    fecha <- as.character(input$fecha_entrevista)
+    hora <- trimws(as.character(input$hora_entrevista))
+    
+    victim_nombre <- trimws(as.character(input$victim_nombre))
+    victim_edad <- trimws(as.character(input$victim_edad))
+    victim_ciudad <- trimws(as.character(input$victim_ciudad))
+    victim_genero <- input$victim_genero
+    victim_ocupacion <- trimws(as.character(input$victim_ocupacion))
+    
+    tipo_victimizacion <- input$victim_tipo_victimizacion
+    medio_extorsion <- trimws(as.character(input$medio_extorsion))
+    solicitud_dinero <- input$solicitud_dinero
+    agresor_afirmacion <- trimws(as.character(input$agresor_afirmacion))
+    denuncia <- input$denuncia
+    nivel_afectacion <- input$nivel_afectacion
+    observaciones <- trimws(as.character(input$observaciones))
+    
+    acompanamiento <- isTRUE(input$acompanamiento)
+    contacto_futuro <- isTRUE(input$contacto_futuro)
+    compartir_anonimo <- isTRUE(input$compartir_anonimo)
+    
+    # Generar ID de caso
+    case_id <- UUIDgenerate()
+    
+    # Si se ingresó nombre u otro PII, lo guardamos hashed (SHA-256) para trazabilidad sin exponer identidad
+    victim_nombre_hashed <- ifelse(nzchar(victim_nombre), digest(victim_nombre, algo = "sha256"), NA)
+    
+    # Construir documento a insertar
+    documento <- list(
+      case_id = case_id,
+      fecha_registro = Sys.time(),
+      entrevistador = entrevistador,
+      medio = medio,
+      fecha_entrevista = fecha,
+      hora_entrevista = hora,
+      
+      # Datos (anonimizados cuando aplica)
+      victim_nombre_hashed = victim_nombre_hashed,
+      victim_edad = victim_edad,
+      victim_ciudad = victim_ciudad,
+      victim_genero = victim_genero,
+      victim_ocupacion = victim_ocupacion,
+      
+      # Contexto
+      tipo_victimizacion = tipo_victimizacion,
+      medio_extorsion = medio_extorsion,
+      solicitud_dinero = solicitud_dinero,
+      agresor_afirmacion = agresor_afirmacion,
+      denuncia = denuncia,
+      nivel_afectacion = nivel_afectacion,
+      observaciones = observaciones,
+      
+      # Acciones y autorizaciones
+      acompanamiento = acompanamiento,
+      contacto_futuro = contacto_futuro,
+      compartir_anonimo = compartir_anonimo,
+      
+      # Metadatos
+      consentimiento = TRUE,
+      created_at = Sys.time()
+    )
+    
+    # Insertar en MongoDB
+    mc <- mongo_casos()
+    if (is.null(mc)) {
+      showNotification("No hay conexión válida a la colección de casos.", type = "error")
+      return()
+    }
+    
+    tryCatch({
+      mc$insert(documento)
+      showModal(modalDialog(
+        title = "Registro guardado",
+        paste("Caso registrado correctamente. ID:", case_id),
+        easyClose = TRUE,
+        footer = modalButton("Cerrar")
+      ))
+      # limpiar formulario
+      updateCheckboxInput(session, "consentimiento", value = FALSE)
+      updateTextInput(session, "victim_nombre", value = "")
+      updateTextInput(session, "victim_edad", value = "")
+      updateTextInput(session, "victim_ciudad", value = "")
+      updateTextInput(session, "victim_ocupacion", value = "")
+      updateTextInput(session, "medio_extorsion", value = "")
+      updateTextInput(session, "agresor_afirmacion", value = "")
+      updateTextAreaInput(session, "observaciones", value = "")
+      updateCheckboxInput(session, "acompanamiento", value = FALSE)
+      updateCheckboxInput(session, "contacto_futuro", value = FALSE)
+      updateCheckboxInput(session, "compartir_anonimo", value = FALSE)
+    }, error = function(e) {
+      showNotification(paste("Error al guardar el caso:", e$message), type = "error")
+    })
+  })
+  
+  
+  
+  
+  
+  
+  
+  
+  #---- Actualizar el selectInput de bases de datos----
+  observeEvent(input$bd, {
+    req(input$bd, mongo_url())
+    updateSelectInput(session, "coleccion", choices = get_collections(input$bd, mongo_url()))
+  })
+  
+  observeEvent(list(input$bd, input$coleccion, mongo_url()), {
+    req(input$bd, input$coleccion, mongo_url())
+    
+    #---- Actualizar selects xvar y yvar basados en las columnas----
+    cols <- tryCatch({
+      get_columns(input$bd, input$coleccion, mongo_url())
+    }, error = function(e) {
+      showNotification("Error al obtener columnas para los selects", type = "error")
+      return(character(0))  # Vacio para evitar error en updateSelectInput
+    })
+    
+    updateSelectInput(session, "xvar", choices = cols)
+    updateSelectInput(session, "yvar", choices = cols)
+    
+    #---- Intentar conectar y traer datos----
+    conexion <- tryCatch({
+      mongo(collection = input$coleccion, db = input$bd, url = mongo_url())
+    }, error = function(e) {
+      showNotification("Error al conectar con MongoDB para cargar datos", type = "error")
+      return(NULL)
+    })
+    
+    if (!is.null(conexion)) {
+      datos <- tryCatch({
+        conexion$find('{}')
+      }, error = function(e) {
+        showNotification("Error al obtener datos de la colección", type = "error")
+        return(data.frame())
+      })
+      
+      datos_reactivos(datos)
+    }
+  })
+  
+  #---- Actualizar tabla de datos----
+  output$tablaDatos <- renderDT({
+    req(datos_reactivos())
+    datatable(datos_reactivos(), selection = "single")
+  })
+  
+  
+  #---- LOGIN CON BASE DE DATOS Y CLUSTER ----
+  observeEvent(input$login, {
+    req(input$username, input$password)
+    
+    # URL global (usuarios normales)
+    url_global <- Sys.getenv("USUARIOS_MONGO_URL")
+    
+    # Intentar conectar como administrador (cadena directa)
+    admin_url <- generate_mongo_url(input$username, input$password)
+    conexion_admin <- tryCatch(
+      mongo(collection = "test", url = admin_url),
+      error = function(e) NULL
+    )
+    
+    is_admin_user <- !is.null(conexion_admin) && conexion_admin$count('{}') >= 0
+    
+    # Conexión para usuarios normales
+    usuarios_collection <- tryCatch(
+      mongo(collection = "User", db = "UsuariosApp", url = url_global),
+      error = function(e) NULL
+    )
+    
+    if (is.null(usuarios_collection)) {
+      showNotification("Error al conectar con la base de datos de usuarios", type = "error")
+      return()
+    }
+    
+    # Buscar usuario por campo 'Correo'
+    usuario <- usuarios_collection$find(query = sprintf('{"Correo": "%s"}', input$username))
+    
+    # Validar usuario normal
+    is_normal_user <- nrow(usuario) > 0 && input$password == usuario$Contrasena[1]
+    
+    # ------------------------------
+    # CASO 1: ADMIN
+    # ------------------------------
+    if (is_admin_user) {
+      user_authenticated(TRUE)
+      mongo_url(admin_url)
+      
+      # Crear token JWT
+      token <- crear_token(input$username, admin_url)
+      runjs(sprintf("sessionStorage.setItem('jwt', '%s');", token))
+      
+      # Mostrar solo panel de admin
+      shinyjs::hide("loginPanel")
+      shinyjs::hide("app_content_user")
+      shinyjs::show("app_content_admin")
+      
+      showNotification(sprintf("Bienvenido administrador: %s", input$username), type = "message")
+      
+      # ------------------------------
+      # CASO 2: USUARIO NORMAL
+      # ------------------------------
+    } else if (is_normal_user) {
+      user_authenticated(TRUE)
+      mongo_url(url_global)
+      
+      token <- crear_token(input$username, url_global)
+      runjs(sprintf("sessionStorage.setItem('jwt', '%s');", token))
+      
+      shinyjs::hide("loginPanel")
+      shinyjs::hide("app_content_admin")
+      shinyjs::show("app_content_user")
+      
+      showNotification(sprintf("Bienvenido, %s", usuario$Nombre[1]), type = "message")
+      
+      # ------------------------------
+      # CASO 3: ERROR
+      # ------------------------------
+    } else {
+      showNotification("Usuario o contraseña incorrectos", type = "error")
+      user_authenticated(FALSE)
+    }
+  })
+  )
+
+
+
+# Enviar al servidor el token guardado en sessionStorage al iniciar la app o refrescar
+observe({
+  # Enviar token del sessionStorage a shiny (se ejecuta siempre que app carga o se refresca)
+  runjs("Shiny.setInputValue('jwt_token', sessionStorage.getItem('jwt') || '', {priority: 'event'});")
+})
+
+
+#----JWT_TOKEN----    
+observeEvent(input$jwt_token, {
+  req(input$jwt_token)
+  
+  claim <- verificar_token(input$jwt_token)
+  
+  if (!is.null(claim)) {
+    user_authenticated(TRUE)
+    mongo_url(claim$mongo_url)
+    
+    # Cargar bases y seleccionar bd guardada
+    bases <- get_databases(claim$mongo_url)
+    updateSelectInput(session, "bd", choices = bases, selected = claim$bd)
+    
+    # Delay para cargar colecciones después de que bd se actualice
+    later::later(function() {
+      if (!is.null(claim$bd) && claim$bd != "") {
+        colls <- get_collections(claim$bd, claim$mongo_url)
+        updateSelectInput(session, "coleccion", choices = colls, selected = claim$coleccion)
+      }
+    }, 0.5)
+    
+    # Luego cargar columnas y actualizar selects xvar, yvar
+    later::later(function() {
+      if (!is.null(claim$bd) && !is.null(claim$coleccion) && claim$coleccion != "") {
+        cols <- get_columns(claim$bd, claim$coleccion, claim$mongo_url)
+        updateSelectInput(session, "xvar", choices = cols, selected = claim$xvar)
+        updateSelectInput(session, "yvar", choices = cols, selected = claim$yvar)
+      }
+    }, 1)
+    
+    shinyjs::show("app_content")
+    shinyjs::hide("loginPanel")
+    
+  } else {
+    user_authenticated(FALSE)
+    runjs("sessionStorage.removeItem('jwt');")
+    shinyjs::hide("app_content")
+    shinyjs::show("loginPanel")
+  }
+})
+
+
+
+# ---- SINCRONIZAR TOKEN CON SELECCIONES ----
+observe({
+  req(user_authenticated())
+  # Solo actualizar token si mongo_url y bd existen
+  if (is.null(mongo_url()) || is.null(input$bd) || input$bd == "") return()
+  
+  token <- crear_token(
+    username = NULL,  # Puedes guardar si la guardas en reactive o input
+    mongo_url = mongo_url(),
+    bd = input$bd,
+    coleccion = input$coleccion,
+    xvar = input$xvar,
+    yvar = input$yvar
+  )
+  runjs(sprintf("sessionStorage.setItem('jwt', '%s');", token))
+})
+
+
+#---- ACTUALIZACIÓN DE COLECCIONES Y COLUMNAS ----
+observeEvent(input$bd, {
+  req(input$bd, mongo_url())
+  colls <- get_collections(input$bd, mongo_url())
+  updateSelectInput(session, "coleccion", choices = colls, selected = NULL)
+})
+
+# Actualizar columnas cuando cambie la colección 
+observeEvent(input$coleccion, {
+  req(input$coleccion, input$bd, mongo_url())
+  cols <- get_columns(input$bd, input$coleccion, mongo_url())
+  updateSelectInput(session, "xvar", choices = cols, selected = NULL)
+  updateSelectInput(session, "yvar", choices = cols, selected = NULL)
+  
+  # Cargar datos en reactive
+  conexion <- mongo(collection = input$coleccion, db = input$bd, url = mongo_url())
+  datos <- conexion$find('{}')
+  datos_reactivos(datos)
+})
+
+#---- Cargar datos cuando cambien bd, coleccion o url----
+observeEvent(list(input$bd, input$coleccion, mongo_url()), {
+  req(input$bd, input$coleccion, mongo_url())
+  conexion <- tryCatch(mongo(collection = input$coleccion, db = input$bd, url = mongo_url()), error = function(e) NULL)
+  if (!is.null(conexion)) {
+    datos <- tryCatch(conexion$find('{}'), error = function(e) data.frame())
+    datos_reactivos(datos)
+  }
+})
+
+# --- GRÁFICO ---
+output$graficoSalida <- renderPlotly({
+  req(input$coleccion, input$xvar, input$yvar, mongo_url())
+  
+  conexion <- mongo(collection = input$coleccion, db = input$bd, url = mongo_url())
+  datos <- conexion$find('{}')
+  datos_reactivos(datos)
+  
+  if (!(input$xvar %in% colnames(datos)) || !(input$yvar %in% colnames(datos))) {
+    return(
+      plot_ly() %>% 
+        layout(
+          xaxis = list(visible = FALSE),
+          yaxis = list(visible = FALSE),
+          annotations = list(
+            text = "La magia está sucediendo ✨\n(Verifica tu selección)",
+            showarrow = FALSE,
+            font = list(size = 18, color = "grey"),
+            xref = "paper",
+            yref = "paper",
+            x = 0.5,
+            y = 0.5,
+            xanchor = "center",
+            yanchor = "middle"
+          ),
+          plot_bgcolor = 'rgba(0,0,0,0)',
+          paper_bgcolor = 'rgba(0,0,0,0)'
+        )
+    )
+  }
+  
+  colores_pastel <- c("#AEC6CF", "#FFB347", "#B39EB5", "#77DD77", "#FF6961", "#FDFD96", "#CB99C9", "#FFD1DC", "#CFCFC4")
+  
+  # Crear vector de colores repetidos según la longitud de datos
+  colores_asignados <- rep(colores_pastel, length.out = nrow(datos))
+  
+  p <- plot_ly(datos)
+  
+  if (input$grafico == "Barras") {
+    p <- p %>% add_bars(
+      x = ~.data[[input$xvar]],
+      y = ~.data[[input$yvar]],
+      marker = list(color = colores_asignados),
+      showlegend = FALSE
+    )
+  } else if (input$grafico == "Puntos") {
+    p <- p %>% add_markers(
+      x = ~.data[[input$xvar]],
+      y = ~.data[[input$yvar]],
+      marker = list(color = colores_asignados),
+      showlegend = FALSE
+    )
+  } else if (input$grafico == "Líneas") {
+    p <- p %>% add_lines(
+      x = ~.data[[input$xvar]],
+      y = ~.data[[input$yvar]],
+      line = list(color = colores_pastel[1]),
+      showlegend = FALSE
+    )
+  } else if (input$grafico == "Histograma") {
+    p <- plot_ly(
+      datos, 
+      x = ~.data[[input$xvar]],
+      type = "histogram",
+      marker = list(color = "#AEC6CF", line = list(color = "gray", width = 1)),
+      showlegend = FALSE
+    )
+  } else if (input$grafico == "Caja") {
+    p <- p %>% add_boxplot(
+      x = ~.data[[input$xvar]],
+      y = ~.data[[input$yvar]],
+      marker = list(color = colores_asignados),
+      showlegend = FALSE
+    )
+  }
+  
+  p %>% layout(
+    xaxis = list(title = input$xvar),
+    yaxis = list(title = input$yvar),
+    title = paste("Gráfico de", input$grafico),
+    showlegend = FALSE
+  )
+})  
+
+
+#---- Cambiar variables X e Y----
+observeEvent(input$swap_axes, {
+  req(input$xvar, input$yvar)
+  updateSelectInput(session, "xvar", selected = input$yvar)
+  updateSelectInput(session, "yvar", selected = input$xvar)
+})
+
+
+#----DESCARGAR EXCEL----
+output$descargar_excel <- downloadHandler(
+  filename = function() {
+    paste0("datos_", Sys.Date(), ".xlsx")
+  },
+  content = function(file) {
+    req(datos_reactivos())
+    library(openxlsx)
+    
+    datos <- datos_reactivos()
+    
+    # Detectar columnas tipo texto y aplicar saltos de línea
+    insertar_saltos <- function(x, n = 50) {
+      vapply(x, function(celda) {
+        if (is.na(celda)) return("")
+        gsub(sprintf("(.{%d})", n), "\\1\n", as.character(celda), perl = TRUE)
+      }, character(1))
+    }
+    
+    columnas_texto <- sapply(datos, is.character) | sapply(datos, is.factor)
+    
+    datos_formateados <- datos  # Copia para modificar solo texto
+    datos_formateados[, columnas_texto] <- lapply(datos[, columnas_texto, drop = FALSE], insertar_saltos)
+    
+    wb <- createWorkbook()
+    addWorksheet(wb, "Datos")
+    
+    estilo_con_wrap <- createStyle(wrapText = TRUE, valign = "top")
+    
+    writeData(wb, "Datos", datos_formateados, withFilter = TRUE)
+    
+    addStyle(wb, "Datos", style = estilo_con_wrap,
+             rows = 1:(nrow(datos_formateados) + 1),
+             cols = which(columnas_texto),
+             gridExpand = TRUE)
+    
+    setColWidths(wb, "Datos", cols = 1:ncol(datos), widths = "auto")
+    setRowHeights(wb, "Datos", rows = 1:(nrow(datos) + 1), heights = "auto")
+    
+    saveWorkbook(wb, file, overwrite = TRUE)
+  }
+)
+
+
+#----DESCARGAR ZIP----
+output$descargar_zip <- downloadHandler(
+  filename = function() {
+    paste0("PI_", Sys.Date(), ".zip")
+  },
+  content = function(file) {
+    # Ruta dentro del proyecto (se sube a shinyapps.io o tu servidor)
+    archivo_origen <- "www/PI.zip"
+    
+    # Copia el archivo directamente
+    file.copy(from = archivo_origen, to = file)
+  }
+)
+
+
+
+#----CONTRASEÑA OLVIDADA----
+
+# Variable para controlar cooldown
+ultima_solicitud <- reactiveVal(Sys.time() - 300)
+
+#---- Mostrar modal para restablecer contraseña----
+observeEvent(input$olvide_pass, {
+  showModal(modalDialog(
+    title = "Solicitud de restablecimiento",
+    textInput("usuario_reset", "Ingrese su usuario"),
+    textInput("correo_user", "Correo de contacto", placeholder = "ejemplo@dominio.com"),
+    footer = tagList(
+      modalButton("Cancelar"),
+      actionButton("enviar_solicitud", "Enviar solicitud")
+    ),
+    size = "m",
+    easyClose = TRUE,
+    fade = TRUE,
+    style = "border-radius: 15px; padding: 20px; background-color: #f0f8ff;"
+  ))
+})
+
+
+#---- Enviar correo al administrador----
+observeEvent(input$enviar_solicitud, {
+  req(input$usuario_reset, input$correo_user)
+  
+  # Validar formato de correo simple
+  if (!grepl(".+@.+\\..+", input$correo_user)) {
+    shinyalert("Correo inválido", "Por favor ingresa un correo válido al que el administrador pueda contactarte.", type = "error")
+    return()
+  }
+  
+  # Validar cooldown
+  tiempo_actual <- Sys.time()
+  if (difftime(tiempo_actual, ultima_solicitud(), units = "secs") < 120) {
+    shinyalert("Paciencia, por favor", "Ya enviaste una solicitud hace poco. Espera un par de minutos antes de intentar de nuevo.", type = "warning")
+    return()
+  }
+  
+  removeModal()
+  
+  # Actualizar tiempo de última solicitud
+  ultima_solicitud(tiempo_actual)
+  
+  # Cuerpo del correo
+  cuerpo <- glue::glue("
+      El usuario **'{input$usuario_reset}'** ha solicitado restablecer su contraseña.\n\n
+      Comunícate con el usuario al siguiente correo:\n
+      {input$correo_user}
+      ")
+  # Crear el mensaje
+  email <- compose_email(
+    body = md(cuerpo)
+  )
+  
+  # Enviar el correo usando las credenciales guardadas en archivo
+  tryCatch({
+    smtp_send(
+      email,
+      from = "recupecontrase@gmail.com",        # correo de envío
+      to = "kecarrilloc@sanmateo.edu.co",       # correo del admin
+      subject = "Solicitud de restablecimiento de contraseña",
+      credentials = creds_file("gmail_creds")   # Archivo de credenciales
+    )
+    showNotification("Solicitud enviada. El administrador se pondrá en contacto contigo.", type = "message")
+  }, error = function(e) {
+    showNotification("Error al enviar la solicitud, por favor, valide usuario y correo", type = "error")
+    print(e$message)
+  })
+})
+
+
+#---- Soporte técnico ----
+
+observeEvent(input$support, {
+  showModal(modalDialog(
+    title = tags$strong("Crear/Seguir Ticket"),
+    easyClose = TRUE,
+    footer = modalButton("Cerrar"),
+    size = "m",
+    tags$div(
+      style = "line-height: 1.6; font-size: 16px;",
+      "Para contactar con soporte y crear tickets debe hacer click en el siguiente enlace.",
+      tags$br(), tags$br(),
+      "Recuerde, para ingresar al software de tickets debe hacerlo con su usuario y contraseña.",
+      tags$br(),
+      "Si no tiene usuario creado en el software de tickets, contacte al administrador por medio del siguiente correo:",
+      tags$br(), tags$br(),
+      tags$a(
+        href = "mailto:rostrosinvisiblessoporte@gmail.com",
+        "rostrosinvisiblessoporte@gmail.com",
+        style = "font-weight: bold;"
+      ),
+      tags$br(), tags$br(),
+      tags$a(
+        href = "https://punditic.sd.cloud.invgate.net/portal",
+        "Abrir portal de soporte",
+        target = "_blank",
+        style = "font-size: 18px; color: #007bff; font-weight: bold;"
+      )
+    )
+  ))
+})
+
+
+#---- Cerrar sesión----
+#---- Manejar el evento de cierre de sesión----
+observeEvent(input$logout, {
+  shinyalert(
+    title = "¿Cerrar sesión?",
+    text = "¿Estás seguro de que deseas cerrar la sesión?",
+    type = "warning",
+    showCancelButton = TRUE,
+    confirmButtonText = "Sí",
+    cancelButtonText = "No",
+    callbackR = function(confirm) {
+      if (confirm) {
+        # Borra JWT del navegador (sessionStorage + cookie)
+        runjs("
+          sessionStorage.removeItem('jwt');
+          document.cookie = 'jwt=; expires=Thu, 01 Jan 2050 00:00:00 UTC; path=/;';
+        ")
+        
+        # Limpia estado de la sesión
+        user_authenticated(FALSE)
+        
+        # Limpia URL MongoDB y cualquier otro reactive relacionado
+        try({
+          mongo_url(NULL)
+        }, silent = TRUE)
+        
+        # Oculta el contenido protegido y muestra el login
+        shinyjs::hide("app_content")
+        shinyjs::show("loginPanel")
+        
+        # Opcional: recargar sesión para limpiar completamente y evitar estados residuales
+        # session$reload()
+      }
+    }
+  )
+})
+
+}
+
+
+shinyApp(ui, server)
