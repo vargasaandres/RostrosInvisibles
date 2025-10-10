@@ -989,7 +989,7 @@ server <- function(input, output, session) {
       textInput("correo_reset", "Ingrese su correo", placeholder = "ejemplo@dominio.com"),
       footer = tagList(
         modalButton("Cancelar"),
-        actionButton("enviar_codigo", "Enviar código")
+        actionButton("enviar_codigo", "Enviar código", class = "btn-custom")
       ),
       size = "m",
       easyClose = TRUE
@@ -1048,7 +1048,7 @@ server <- function(input, output, session) {
         passwordInput("nueva_pass2", "Confirma la contraseña"),
         footer = tagList(
           modalButton("Cancelar"),
-          actionButton("verificar_codigo", "Verificar y guardar")
+          actionButton("verificar_codigo", "Verificar y guardar", class = "btn-custom")
         ),
         easyClose = TRUE
       ))
