@@ -525,6 +525,7 @@ server <- function(input, output, session) {
   mongo_url <- reactiveVal(NULL)
   datos_reactivos <- reactiveVal(data.frame())
   datos_casos_extorsion <- reactiveVal(data.frame())
+  correo_en_verificacion <- reactiveVal(NULL)
   
   #---- Variable para controlar cooldown----
   ultima_solicitud <- reactiveVal(Sys.time() - 300)
@@ -969,75 +970,130 @@ server <- function(input, output, session) {
   
   #----CONTRASEñA OLVIDADA----
   
-  # Variable para controlar cooldown
-  ultima_solicitud <- reactiveVal(Sys.time() - 300)
+  # helper: conexión (tu cadena intacta)
+  mongo_conn <- function(collection) {
+    mongo(
+      collection = collection,
+      db = "UsuariosApp",
+      url = "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    )
+  }
   
-  #---- Mostrar modal para restablecer contraseña----
+  # Generar código (6 dígitos)
+  generar_codigo6 <- function() sprintf("%06d", sample(0:999999, 1))
+  
+  # Único observe para flujo: pedir correo -> enviar código -> pedir código -> verificar y cambiar
   observeEvent(input$olvide_pass, {
     showModal(modalDialog(
-      title = "Solicitud de restablecimiento",
-      textInput("usuario_reset", "Ingrese su usuario"),
-      textInput("correo_user", "Correo de contacto", placeholder = "ejemplo@dominio.com"),
+      title = "Restablecimiento de contraseña",
+      textInput("correo_reset", "Ingrese su correo", placeholder = "ejemplo@dominio.com"),
       footer = tagList(
         modalButton("Cancelar"),
-        actionButton("enviar_solicitud", "Enviar solicitud")
+        actionButton("enviar_codigo", "Enviar código")
       ),
       size = "m",
-      easyClose = TRUE,
-      fade = TRUE,
-      style = "border-radius: 15px; padding: 20px; background-color: #f0f8ff;"
+      easyClose = TRUE
     ))
   })
   
-  
-  #---- Enviar correo al administrador----
-  observeEvent(input$enviar_solicitud, {
-    req(input$usuario_reset, input$correo_user)
+  # Enviar código
+  observeEvent(input$enviar_codigo, {
+    req(input$correo_reset)
+    m <- mongo_conn("User")
     
-    # Validar formato de correo simple
-    if (!grepl(".+@.+\\..+", input$correo_user)) {
-      shinyalert("Correo inválido", "Por favor ingresa un correo válido al que el administrador pueda contactarte.", type = "error")
-      return()
-    }
-    
-    # Validar cooldown
-    tiempo_actual <- Sys.time()
-    if (difftime(tiempo_actual, ultima_solicitud(), units = "secs") < 120) {
-      shinyalert("Paciencia, por favor", "Ya enviaste una solicitud hace poco. Espera un par de minutos antes de intentar de nuevo.", type = "warning")
-      return()
-    }
-    
-    removeModal()
-    
-    # Actualizar tiempo de Ãºltima solicitud
-    ultima_solicitud(tiempo_actual)
-    
-    # Cuerpo del correo
-    cuerpo <- glue::glue("
-      El usuario **'{input$usuario_reset}'** ha solicitado restablecer su contraseña.\n\n
-      Comunícate con el usuario al siguiente correo:\n
-      {input$correo_user}
-      ")
-    # Crear el mensaje
-    email <- compose_email(
-      body = md(cuerpo)
+    # Buscar por campo 'Correo' (case-insensitive)
+    usuario <- m$find(
+      query = paste0('{"Correo": {"$regex": "^', tolower(input$correo_reset), '$", "$options": "i"}}'),
+      limit = 1
     )
     
-    # Enviar el correo usando las credenciales guardadas en archivo
+    if (nrow(usuario) == 0) {
+      showNotification("Correo no encontrado", type = "error")
+      return()
+    }
+    
+    codigo <- generar_codigo6()
+    expiracion <- as.integer(Sys.time()) + 60  # 60 segundos
+    
+    # Sobrescribir código anterior (atomic)
+    m$update(
+      query = paste0('{"Correo": {"$regex": "^', tolower(input$correo_reset), '$", "$options": "i"}}'),
+      update = paste0('{"$set": {"codigo_reset": "', codigo, '", "codigo_expira": ', expiracion, '}}'),
+      upsert = FALSE, multiple = FALSE
+    )
+    
+    # Enviar correo (blastula). Asume creds_file("gmail_creds") existe
+    email <- blastula::compose_email(
+      body = md(glue::glue("
+      Hola,\n\nHas solicitado cambiar tu contraseña.\n\nTu código de verificación es: **{codigo}**\n\nEste código expira en 1 minuto.\n\nSi no solicitaste esto, ignora este correo.
+    "))
+    )
+    
     tryCatch({
-      smtp_send(
+      blastula::smtp_send(
         email,
-        from = "recupecontrase@gmail.com",        # correo de envÃ­o
-        to = "kecarrilloc@sanmateo.edu.co",       # correo del admin
-        subject = "Solicitud de restablecimiento de contraseña",
-        credentials = creds_file("gmail_creds")   # Archivo de credenciales
+        from = "recupecontrase@gmail.com",
+        to = input$correo_reset,
+        subject = "Código de verificación para cambiar contraseña",
+        credentials = blastula::creds_file("gmail_creds")
       )
-      showNotification("Solicitud enviada. El administrador se pondrá en contacto contigo.", type = "message")
+      showNotification("Código enviado. Revisa tu correo.", type = "message")
+      removeModal()
+      
+      # Mostrar modal para ingresar código y nueva contraseña
+      showModal(modalDialog(
+        title = "Ingresa el código recibido",
+        textInput("codigo_input", "Código de verificación"),
+        passwordInput("nueva_pass", "Nueva contraseña"),
+        passwordInput("nueva_pass2", "Confirma la contraseña"),
+        footer = tagList(
+          modalButton("Cancelar"),
+          actionButton("verificar_codigo", "Verificar y guardar")
+        ),
+        easyClose = TRUE
+      ))
+      
     }, error = function(e) {
-      showNotification("Error al enviar la solicitud, por favor, valide usuario y correo", type = "error")
+      showNotification("Error al enviar el correo", type = "error")
       print(e$message)
     })
   })
+  
+  # Verificar y actualizar contraseña
+  observeEvent(input$verificar_codigo, {
+    req(input$codigo_input, input$nueva_pass, input$nueva_pass2)
+    if (input$nueva_pass != input$nueva_pass2) {
+      showNotification("Las contraseñas no coinciden", type = "error"); return()
+    }
+    
+    m <- mongo_conn("User")
+    # Buscar por Correo (case-insensitive) y codigo_reset exacto
+    usuario <- m$find(
+      query = paste0('{"Correo": {"$regex": "^', tolower(input$correo_reset), '$", "$options": "i"}, "codigo_reset": "', input$codigo_input, '"}'),
+      limit = 1
+    )
+    
+    if (nrow(usuario) == 0) {
+      showNotification("Código inválido o correo no encontrado", type = "error"); return()
+    }
+    
+    # Asegurarse que codigo_expira sea numérico y comparar
+    expira <- as.numeric(usuario$codigo_expira[1])
+    if (is.na(expira) || expira < as.integer(Sys.time())) {
+      showNotification("Código inválido o expirado", type = "error"); return()
+    }
+    
+    # Actualizar password (aquí deberías hashear la contraseña)
+    m$update(
+      query = paste0('{"Correo": {"$regex": "^', tolower(input$correo_reset), '$", "$options": "i"}}'),
+      update = paste0('{"$set": {"Contrasena": "', input$nueva_pass, '"}, "$unset": {"codigo_reset": "", "codigo_expira": ""}}')
+    )
+    
+    showNotification("Contraseña cambiada correctamente", type = "message")
+    removeModal()
+  })
+  
+  
   
   
   #---- Soporte tecnico ----
