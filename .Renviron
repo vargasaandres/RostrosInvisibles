@@ -1,2 +1,3 @@
 PATH="${RTOOLS40_HOME}\usr\bin;${PATH}"
 JWT_SECRET=claveSuperSecreta123
+MONGOURL="mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
