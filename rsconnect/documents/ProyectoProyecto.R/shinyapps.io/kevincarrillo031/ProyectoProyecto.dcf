@@ -1,0 +1,12 @@
+name: ProyectoProyecto
+title: ProyectoProyecto
+username: kevincarrillo031
+account: kevincarrillo031
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15724978
+bundleId:
+url: https://rostrosinvisibles.shinyapps.io/ProyectoProyecto/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

@@ -5,7 +5,7 @@ account: kevincarrillo031
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 14809723
-bundleId: 11001504
+bundleId: 11019945
 url: https://rostrosinvisibles.shinyapps.io/Proyecto/
 version: 1
 asMultiple: FALSE

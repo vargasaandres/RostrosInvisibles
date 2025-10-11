@@ -22,7 +22,6 @@ library(sass)
 
 
 
-
 #---- Front ----
 ui <- fluidPage(
   useShinyjs(),  # Necesario para shinyj
@@ -605,9 +604,6 @@ server <- function(input, output, session) {
     colnames(datos)
   }
   
-  #---- Función para generar la URL de conexión a MongoDB----
-  generate_mongo_url <- "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-
   
   #---- Verificar el token al cargar la app----
   observe({
@@ -672,7 +668,7 @@ server <- function(input, output, session) {
     req(input$username, input$password)
     
     # Conexión con las credenciales fijas
-    url <- "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    url <- Sys.getenv("MONGOURL")
     
     # Conexión a la colección de usuarios
     usuarios_collection <- mongo(collection = "User", db = "UsuariosApp", url = url)
@@ -975,7 +971,7 @@ server <- function(input, output, session) {
     mongo(
       collection = collection,
       db = "UsuariosApp",
-      url = "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+      url = Sys.getenv("MONGOURL")
     )
   }
   
@@ -1213,7 +1209,7 @@ server <- function(input, output, session) {
     }
     
     # Conexión técnica
-    url <- "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+    url <- Sys.getenv("MONGOURL")
     usuarios_collection <- mongo(collection = "User", db = "UsuariosApp", url = url)
     
     # Verificar si ya existe el correo
@@ -1307,7 +1303,7 @@ observeEvent(input$guardar_encuesta, {
   req(input$q_genero, input$q_edad, input$q_zona, input$q_tipo_extorsion,
       input$q_frecuencia, input$q_monto, input$q_denuncia, input$q_resultado, input$q_afectacion)
   
-  url <- "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+  url <- Sys.getenv("MONGOURL")
   casos_collection <- mongo(collection = "Casos", db = "CasosExtorsion", url = url)
   
   registro <- list(
@@ -1335,7 +1331,7 @@ observeEvent(input$guardar_encuesta, {
   observeEvent(input$actualizar_info, {
     showNotification("Actualizando información...", type = "message")
     
-    mongo_conn <- mongo(collection = "Casos", db = "CasosExtorsion", url <- "mongodb+srv://kecarrilloc:Proyecto080225@cluster0.1ti18.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+    mongo_conn <- mongo(collection = "Casos", db = "CasosExtorsion", url <- Sys.getenv("MONGOURL"))
     datos_actualizados <- mongo_conn$find()
     datos_casos_extorsion(datos_actualizados)
     
